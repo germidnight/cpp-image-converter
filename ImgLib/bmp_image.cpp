@@ -99,7 +99,7 @@ bool SaveBMP(const Path& file, const Image& image) {
 
     ofstream out(file, ios::binary);
     /* Пишем в файл заголовки */
-    out << bfh << bih << flush;
+    out << bfh << bih;
     /* Пишем саму картинку */
     vector<char> buff(width_stride, 0);
 
