@@ -84,10 +84,11 @@ istream& operator>>(istream& input, BitmapInfoHeader& bih) {
 
 // функция вычисления отступа по ширине
 static int GetBMPStride(int w) {
-    return 4 * ((w * 3 + 3) / 4);
+    const int padding = 4;
+    const int channels_per_pixel = 3;
+    return padding * ((w * channels_per_pixel + channels_per_pixel) / padding);
 }
 
-// напишите эту функцию
 bool SaveBMP(const Path& file, const Image& image) {
     BitmapFileHeader bfh;
     BitmapInfoHeader bih;
@@ -100,6 +101,10 @@ bool SaveBMP(const Path& file, const Image& image) {
     ofstream out(file, ios::binary);
     /* Пишем в файл заголовки */
     out << bfh << bih;
+    if (out.fail()) {
+        return false;
+    }
+
     /* Пишем саму картинку */
     vector<char> buff(width_stride, 0);
 
@@ -115,17 +120,31 @@ bool SaveBMP(const Path& file, const Image& image) {
             buff[x] = 0;
         }
         out.write(buff.data(), static_cast<long long int>(width_stride));
+        if (out.fail()) {
+            return false;
+        }
     }
     return true;
 }
 
-// напишите эту функцию
+bool BMPHasCorrectSignature(const BitmapFileHeader &bfh, const BitmapInfoHeader &bih) {
+    if ((bfh.signature[0] != 'B') || (bfh.signature[1] != 'M')) return false;
+    if ((bfh.total_length < 58) || (bfh.file_begin_ident != 54)) return false;
+    if (bih.bih_length != 40) return false;
+    if (!(bih.image_height > 0) || !(bih.image_width > 0)) return false;
+    if (bih.data_length != (bfh.total_length - bfh.file_begin_ident)) return false;
+    return true;
+}
+
 Image LoadBMP(const Path& file) {
     BitmapFileHeader bfh;
     BitmapInfoHeader bih;
     ifstream ifs(file, ios::binary);
 
     ifs >> bfh >> bih;
+    if (ifs.fail() || !BMPHasCorrectSignature(bfh, bih)) {
+        return Image(0, 0 , Color::Black()); // возвращаем некорректное изображение (площадь равна нулю)
+    }
 
     const size_t width_stride = static_cast<size_t>(GetBMPStride(static_cast<int>(bih.image_width)));
 
@@ -136,7 +155,9 @@ Image LoadBMP(const Path& file) {
     for (int y = static_cast<int>(bih.image_height) - 1; y >= 0; --y) {
         Color *line = result_image.GetLine(y);
         ifs.read(buff.data(), static_cast<long long int>(width_stride));
-
+        if (ifs.fail()) {
+            return Image(0, 0, Color::Black());
+        }
         for (size_t x = 0; x < bih.image_width; ++x) {
             line[x].b = static_cast<byte>(buff[x * 3 + 0]);
             line[x].g = static_cast<byte>(buff[x * 3 + 1]);
